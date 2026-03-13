@@ -1,0 +1,35 @@
+# =========================================================
+# Smart CareerForge — Requirements
+# =========================================================
+
+# Core
+streamlit==1.35.0
+python-dotenv==1.0.1
+requests==2.31.0
+numpy==1.26.4
+matplotlib==3.8.4
+
+# LangChain ecosystem
+langchain==0.2.6
+langchain-community==0.2.6
+langchain-core==0.2.10
+langchain-huggingface==0.0.3
+langchain-chroma==0.1.2
+
+# Vector DB & Embeddings
+chromadb==0.5.0
+sentence-transformers==3.0.1
+torch --index-url https://download.pytorch.org/whl/cpu
+
+# ML
+scikit-learn==1.5.0
+
+# LLM providers
+groq==0.9.0
+huggingface-hub==0.23.4
+
+# PDF processing
+pypdf==4.2.0
+
+# LangSmith tracing
+langsmith==0.1.83

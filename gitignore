@@ -1,0 +1,33 @@
+# =========================================================
+# Smart CareerFordge — .gitignore
+# =========================================================
+
+# Secrets — NEVER commit these
+.env
+
+# Database and user data
+career_path.db
+data/
+uploads/
+chroma_roles/
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+venv/
+.venv/
+
+# OS
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+
+# Logs
+*.log
