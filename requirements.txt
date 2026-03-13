@@ -33,3 +33,6 @@ pypdf==4.2.0
 
 # LangSmith tracing
 langsmith==0.1.83
+
+# IMPORTANT FIX
+httpx==0.27.0
