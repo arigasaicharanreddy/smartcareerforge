@@ -377,6 +377,12 @@ st.markdown("""
     .hero-stat-lbl { font-size:0.72rem; color:#9CA3AF !important; margin-top:2px; }
     .like-badge { display:inline-block; background:#052e16; color:#22c55e !important; font-size:0.7rem; font-weight:700; padding:2px 9px; border-radius:10px; border:1px solid #16a34a; cursor:pointer; }
     .tag-pill { display:inline-block; background:#1a1a2e; color:#818cf8 !important; font-size:0.68rem; font-weight:600; padding:2px 8px; border-radius:8px; margin-right:4px; border:1px solid #312e81; }
+
+    /* RESOURCE CARD */
+    .resource-card { background:#080f18; border:1px solid #1a2535; border-left:3px solid #22D3EE; border-radius:12px; padding:16px 18px; margin-bottom:10px; }
+    .resource-title { font-family:'Syne',sans-serif; font-size:0.92rem; font-weight:700; color:#F3F4F6 !important; margin-bottom:6px; }
+    .resource-platform { display:inline-block; background:#0e2a35; color:#22D3EE !important; font-size:0.68rem; font-weight:700; padding:2px 8px; border-radius:8px; margin-bottom:8px; }
+    .resource-summary { font-size:0.82rem; color:#CBD5E1 !important; line-height:1.6; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -442,12 +448,11 @@ def _call_groq_direct(messages: list, system_prompt: str,
                        _retries: int = 2) -> str:
     """
     Call Groq Llama-3.3-70B with automatic retry on transient failures.
-    Retries up to _retries times with back-off before giving up.
     """
     start_time = time.time()
     last_error = None
 
-    for attempt in range(1, _retries + 2):          # attempts: 1, 2, 3
+    for attempt in range(1, _retries + 2):
         try:
             client = get_groq_client()
             groq_messages = [{"role": "system", "content": system_prompt}]
@@ -489,26 +494,22 @@ def _call_groq_direct(messages: list, system_prompt: str,
             last_error = e
             err = str(e).lower()
 
-            # Rate limit — don't retry, fail immediately
             if "rate" in err or "429" in err:
                 _alert_rate_limit(feature_tag)
                 return "⚠️ Groq rate limit reached. Please wait 30 seconds and try again."
 
-            # Last attempt exhausted
             if attempt == _retries + 1:
                 break
 
-            # Transient error — short back-off then retry
-            time.sleep(attempt * 2)         # 2s after attempt 1, 4s after attempt 2
+            time.sleep(attempt * 2)
 
-    # All retries failed
     _alert_error(feature_tag, type(last_error).__name__, str(last_error))
     _increment_error_count(feature_tag)
     return "⚠️ AI temporarily unavailable. Please try again in a moment."
 
 
 # =========================================================
-# ADZUNA JOBS API — reads credentials from .env
+# ADZUNA JOBS API
 # =========================================================
 ADZUNA_COUNTRY = "in"
 ADZUNA_BASE    = "https://api.adzuna.com/v1/api/jobs"
@@ -706,9 +707,7 @@ def render_job_cards(jobs: list, role: str, location: str, show_applied_btn: boo
 
 
 # =========================================================
-# =========================================================
-# LLM WRAPPER — all calls route through Groq (Llama-3.3-70B)
-# HuggingFace inference removed — too slow / times out on Streamlit Cloud
+# LLM WRAPPER
 # =========================================================
 
 @traceable(name="groq_llm_call_safe", run_type="llm",
@@ -716,11 +715,6 @@ def render_job_cards(jobs: list, role: str, location: str, show_applied_btn: boo
 def safe_llm_invoke(prompt: str,
                     fallback: str = "⚠️ AI response took too long. Please try again.",
                     feature_tag: str = "general") -> str:
-    """
-    Drop-in replacement for the old HuggingFace safe_llm_invoke.
-    Routes every call through Groq Llama-3.3-70B with automatic retry.
-    10-20x faster than HuggingFace free inference; no cold-start timeouts.
-    """
     start_time = time.time()
     try:
         result = _call_groq_direct(
@@ -1199,7 +1193,7 @@ def compute_resume_score_card(resume_text: str, resume_skills: str) -> dict:
 
 
 # =========================================================
-# AI COVER LETTER GENERATOR (Groq)
+# AI COVER LETTER GENERATOR
 # =========================================================
 def generate_cover_letter(resume_text: str, jd_text: str, candidate_name: str,
                            exp_level: str, location: str) -> str:
@@ -1238,7 +1232,7 @@ Instructions:
 
 
 # =========================================================
-# SALARY ESTIMATOR (Groq)
+# SALARY ESTIMATOR
 # =========================================================
 def estimate_salary(skills: str, location: str, exp_years: int, exp_level: str,
                     target_role: str) -> str:
@@ -1304,7 +1298,7 @@ STRICT RULES:
 
 
 # =========================================================
-# LINKEDIN SUMMARY WRITER (Groq)
+# LINKEDIN SUMMARY WRITER
 # =========================================================
 def generate_linkedin_bio(resume_text: str, resume_skills: str, exp_level: str,
                            target_role: str, candidate_name: str) -> str:
@@ -1344,7 +1338,7 @@ GROUNDING RULES (strictly follow):
 
 
 # =========================================================
-# JOB MARKET INSIGHTS (Adzuna counts)
+# JOB MARKET INSIGHTS
 # =========================================================
 def fetch_market_insights(roles_to_check: list) -> dict:
     insights = {}
@@ -1740,215 +1734,7 @@ def _liked_set() -> set:
 
 
 # =========================================================
-# SCREEN: FEEDBACK & COMMUNITY
-# =========================================================
-def render_feedback_app():
-    back_button()
-    st.markdown('<div class="screen-header">⭐ Feedback & Community</div>', unsafe_allow_html=True)
-    st.markdown('<div class="screen-subheader">Share your experience · Rate features · Read what others say</div>', unsafe_allow_html=True)
-
-    stats = fb_get_stats()
-
-    st.markdown("<br>", unsafe_allow_html=True)
-    h1, h2, h3, h4 = st.columns(4)
-    avg_stars = "⭐" * round(stats["avg"]) if stats["avg"] else "—"
-    with h1:
-        st.markdown(f"""<div class="hero-stat">
-            <div class="hero-stat-num">{stats["total"]}</div>
-            <div class="hero-stat-lbl">Total Reviews</div></div>""", unsafe_allow_html=True)
-    with h2:
-        st.markdown(f"""<div class="hero-stat">
-            <div class="hero-stat-num">{stats["avg"] or "—"}</div>
-            <div class="hero-stat-lbl">Avg Rating / 5</div></div>""", unsafe_allow_html=True)
-    with h3:
-        dist = stats["dist"]
-        five_pct = int(dist.get(5, 0) / max(stats["total"], 1) * 100)
-        st.markdown(f"""<div class="hero-stat">
-            <div class="hero-stat-num">{five_pct}%</div>
-            <div class="hero-stat-lbl">5-Star Reviews</div></div>""", unsafe_allow_html=True)
-    with h4:
-        top_f = stats["top_features"][0]["feature"].split()[0] if stats["top_features"] else "—"
-        st.markdown(f"""<div class="hero-stat">
-            <div class="hero-stat-num" style="font-size:1.1rem;">{top_f}</div>
-            <div class="hero-stat-lbl">Most Reviewed</div></div>""", unsafe_allow_html=True)
-
-    st.markdown("<br>", unsafe_allow_html=True)
-
-    left_col, right_col = st.columns([1.1, 1.9], gap="large")
-
-    with left_col:
-        st.markdown("#### 📊 Rating Summary")
-        if stats["total"] > 0:
-            st.markdown(f"""
-            <div style="text-align:center; padding:16px 0;">
-                <div class="avg-score">{stats["avg"]}</div>
-                <div style="font-size:1.6rem; margin:4px 0;">{"⭐" * round(stats["avg"])}</div>
-                <div class="avg-label">Based on {stats["total"]} review{"s" if stats["total"] != 1 else ""}</div>
-            </div>""", unsafe_allow_html=True)
-
-            for star in range(5, 0, -1):
-                count = stats["dist"].get(star, 0)
-                pct   = int(count / max(stats["total"], 1) * 100)
-                st.markdown(f"""
-                <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px;">
-                    <span style="font-size:0.75rem; color:#9CA3AF; width:28px; text-align:right;">{star}★</span>
-                    <div class="rating-bar-wrap" style="flex:1;">
-                        <div class="rating-bar-fill" style="width:{pct}%;"></div>
-                    </div>
-                    <span style="font-size:0.72rem; color:#4B5563; width:28px;">{count}</span>
-                </div>""", unsafe_allow_html=True)
-        else:
-            st.info("No ratings yet. Be the first!")
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        if stats["top_features"]:
-            st.markdown("#### 🏆 Top Reviewed Features")
-            for f in stats["top_features"]:
-                stars_mini = "⭐" * round(f["avg"])
-                st.markdown(f"""
-                <div style="display:flex; justify-content:space-between; align-items:center;
-                            padding:6px 0; border-bottom:1px solid #1a1a1a;">
-                    <span style="font-size:0.78rem; color:#CBD5E1;">{f["feature"]}</span>
-                    <span style="font-size:0.72rem; color:#22D3EE;">{stars_mini} {f["avg"]}</span>
-                </div>""", unsafe_allow_html=True)
-
-        st.markdown("<br>", unsafe_allow_html=True)
-
-        st.markdown("#### ✍️ Leave a Review")
-        with st.form("feedback_form", clear_on_submit=True):
-            fb_name    = st.text_input("Your Name", placeholder="e.g. Priya S. (or leave blank for Anonymous)")
-            fb_feature = st.selectbox("Which feature are you rating?", FEEDBACK_FEATURES)
-            fb_rating  = st.select_slider(
-                "Your Rating ⭐",
-                options=[1, 2, 3, 4, 5],
-                value=5,
-                format_func=lambda x: {1:"1 ★ Poor", 2:"2 ★★ Fair", 3:"3 ★★★ Good",
-                                        4:"4 ★★★★ Great", 5:"5 ★★★★★ Excellent"}[x]
-            )
-            fb_comment = st.text_area(
-                "Your Comment",
-                placeholder="Tell us what worked well, what could be better, or how it helped you…",
-                height=100
-            )
-            fb_tags_chosen = st.multiselect(
-                "Quick Tags (optional)",
-                FEEDBACK_TAGS,
-                max_selections=3,
-                help="Pick up to 3 tags that describe your experience"
-            )
-            submitted = st.form_submit_button("Submit Review ✓", type="primary", use_container_width=True)
-
-        if submitted:
-            if not fb_comment.strip():
-                st.warning("Please write a comment before submitting.")
-            else:
-                ok = fb_submit(fb_name, fb_feature, fb_rating, fb_comment, fb_tags_chosen)
-                if ok:
-                    st.success("🎉 Thank you! Your review has been posted.")
-                    st.session_state.feedback_submitted = True
-                    st.balloons()
-                    st.rerun()
-                else:
-                    st.error("Could not save review. Please try again.")
-
-    with right_col:
-        st.markdown("#### 💬 Community Reviews")
-
-        fc1, fc2 = st.columns([1.4, 1])
-        with fc1:
-            filter_feature = st.selectbox(
-                "Filter by feature", ["All"] + FEEDBACK_FEATURES,
-                key="fb_filter", label_visibility="collapsed"
-            )
-        with fc2:
-            sort_by = st.selectbox(
-                "Sort", ["newest", "oldest", "highest", "lowest", "most liked"],
-                key="fb_sort", label_visibility="collapsed"
-            )
-
-        reviews = fb_get_all(filter_feature, sort_by)
-        session_id = _session_id()
-        liked_ids  = _liked_set()
-
-        if not reviews:
-            st.markdown("""
-            <div style="text-align:center; padding:60px 20px; color:#4B5563;">
-                <div style="font-size:2.5rem; margin-bottom:12px;">💬</div>
-                <div style="font-size:0.9rem; color:#6B7280;">No reviews yet for this filter.<br>Be the first to share your experience!</div>
-            </div>""", unsafe_allow_html=True)
-        else:
-            st.caption(f"{len(reviews)} review{'s' if len(reviews) != 1 else ''} found")
-            for rev in reviews:
-                tags_html = ""
-                if rev["tags"]:
-                    for tag in rev["tags"].split(","):
-                        if tag.strip():
-                            tags_html += f'<span class="tag-pill">{tag.strip()}</span>'
-
-                star_filled = "⭐" * rev["rating"]
-                star_empty  = "☆" * (5 - rev["rating"])
-                is_liked    = rev["id"] in liked_ids
-
-                st.markdown(f"""
-                <div class="fb-card">
-                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
-                        <div>
-                            <span class="fb-author">{rev["name"]}</span>
-                            <span class="fb-feature">{rev["feature"]}</span>
-                        </div>
-                        <span class="fb-date">{rev["created"][:16]}</span>
-                    </div>
-                    <div class="fb-stars">{star_filled}{star_empty}</div>
-                    <div class="fb-comment">{rev["comment"]}</div>
-                    {f'<div style="margin-top:8px;">{tags_html}</div>' if tags_html else ''}
-                    <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
-                        <span class="like-badge">{"❤️" if is_liked else "🤍"} {rev["likes"]} helpful</span>
-                    </div>
-                </div>""", unsafe_allow_html=True)
-
-                btn_label = f"{'❤️ Liked' if is_liked else '🤍 Helpful'} (#{rev['id']})"
-                if st.button(btn_label, key=f"like_{rev['id']}", use_container_width=False):
-                    new_count = fb_toggle_like(rev["id"], session_id)
-                    if is_liked:
-                        liked_ids.discard(rev["id"])
-                    else:
-                        liked_ids.add(rev["id"])
-                    st.session_state._liked_ids = liked_ids
-                    st.rerun()
-
-        highlights = stats["highlights"]
-        if highlights and filter_feature == "All":
-            st.markdown("---")
-            st.markdown("#### 🌟 Top Reviews")
-            for h in highlights:
-                star_h = "⭐" * h["rating"]
-                st.markdown(f"""
-                <div class="fb-card" style="border-left:3px solid #22D3EE;">
-                    <div style="display:flex; justify-content:space-between;">
-                        <span class="fb-author">{h["name"]}</span>
-                        <span class="fb-date">{h["created"][:10]}</span>
-                    </div>
-                    <div class="fb-stars">{star_h}</div>
-                    <div class="fb-comment">"{h["comment"]}"</div>
-                </div>""", unsafe_allow_html=True)
-
-
-# =========================================================
-# NAVIGATION
-# =========================================================
-def go_home(): st.session_state.current_screen = "home"
-def go_to(screen): st.session_state.current_screen = screen
-
-def back_button():
-    col_b, col_rest = st.columns([0.22, 0.78])
-    with col_b:
-        st.button("Home", on_click=go_home, key=f"back_{st.session_state.current_screen}", use_container_width=True)
-    st.divider()
-
-
-# =========================================================
-# URL / ROADMAP HELPERS
+# URL / ROADMAP HELPERS  ← FIXED SECTION
 # =========================================================
 _PLATFORM_EMOJI = {
     "YouTube": "▶️", "GitHub": "🐙", "Udemy": "🎓", "Coursera": "📚",
@@ -1958,11 +1744,11 @@ _PLATFORM_EMOJI = {
 def _detect_platform(url: str):
     u = url.lower()
     if "youtube.com" in u or "youtu.be" in u: return "YouTube", "video"
-    if "github.com" in u: return "GitHub", "repo"
-    if "udemy.com" in u: return "Udemy", "course"
-    if "coursera.org" in u: return "Coursera", "course"
-    if "edx.org" in u: return "edX", "course"
-    if "docs." in u or "/docs/" in u: return "Docs", "documentation"
+    if "github.com" in u:                      return "GitHub", "repo"
+    if "udemy.com" in u:                       return "Udemy", "course"
+    if "coursera.org" in u:                    return "Coursera", "course"
+    if "edx.org" in u:                         return "edX", "course"
+    if "docs." in u or "/docs/" in u:          return "Docs", "documentation"
     return "Generic", "page"
 
 _PAREN_URL_RE = re.compile(r"([^\n\(]{3,80}?)\s*\(\s*(https?://[^\s\)\],\"\'<>]+[^\s\)\],\"\'<>]*)\s*\)", re.MULTILINE)
@@ -1988,50 +1774,107 @@ def extract_urls_from_roadmap(roadmap_text: str) -> list:
             seen.add(url); unique.append({"url": url, "label": ""})
     return unique
 
-def _http_get(url, timeout=8):
+def _http_get(url, timeout=6):
+    """Attempt HTTP GET — returns empty string on any failure (network disabled, timeout, etc)."""
     try:
         req = urllib.request.Request(url, headers=_HTTP_HEADERS)
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             return resp.read().decode("utf-8", errors="ignore")
-    except Exception: return ""
-
-def _strip_html(html, max_chars=1000):
-    s = re.sub(r"<style[^>]*>.*?</style>", " ", html, flags=re.DOTALL)
-    s = re.sub(r"<script[^>]*>.*?</script>", " ", s, flags=re.DOTALL)
-    s = re.sub(r"<[^>]+>", " ", s)
-    s = re.sub(r"[ \t\r\n]+", " ", s).strip()
-    return s[:max_chars]
+    except Exception:
+        return ""
 
 def _title_from_url(url):
     parts = [p for p in urllib.parse.urlparse(url).path.split("/") if p]
     return parts[-1].replace("-"," ").replace("_"," ").title() if parts else url
 
-def _process_single_url(role_name, url, label=""):
-    platform, resource_type = _detect_platform(url)
-    html  = _http_get(url, timeout=6)
-    title = label or _title_from_url(url)
-    if html:
-        m = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE | re.DOTALL)
-        if m: title = re.sub(r"\s+", " ", m.group(1)).strip()[:100]
-    system = "You are a career learning advisor. Be concise and practical."
-    prompt = (f"You are a career learning advisor for a {role_name} role. "
-              f"In exactly 3 sentences, explain why this resource is valuable: "
-              f"URL: {url}, Platform: {platform}, Title: {title}")
-    summary = _call_groq_direct(
-        [{"role": "user", "content": prompt}], system,
-        max_tokens=200, temperature=0.3, feature_tag="url_summarizer"
-    )
-    return {"url": url, "label": label, "platform": platform, "resource_type": resource_type,
-            "title": title, "summary": summary}
+# ── FIXED: robust single-URL processor ──────────────────────────
+def _process_single_url(role_name: str, url: str, label: str = "") -> dict:
+    """
+    Generate an AI summary card for a learning resource URL.
 
-def _process_url_batch(role_name, batch):
+    Changes vs original:
+    • HTTP fetch is attempted but failure is silently ignored (works even with
+      network disabled — title falls back to URL slug).
+    • Groq call is wrapped in try/except so a single failure never crashes the
+      whole batch.
+    • Prompt asks Groq to describe the resource TYPE from URL + platform alone,
+      so it still produces useful output even without page content.
+    """
+    platform, resource_type = _detect_platform(url)
+    title = label or _title_from_url(url)
+
+    # ── 1. Try to fetch the real page title (best effort) ────────
+    try:
+        html = _http_get(url, timeout=5)
+        if html:
+            m = re.search(r'<title[^>]*>(.*?)</title>', html, re.IGNORECASE | re.DOTALL)
+            if m:
+                fetched_title = re.sub(r"\s+", " ", m.group(1)).strip()[:100]
+                if fetched_title:
+                    title = fetched_title
+    except Exception:
+        pass  # network disabled or timeout — use fallback title
+
+    # ── 2. Ask Groq for a summary (best effort) ──────────────────
+    summary = ""
+    try:
+        system = "You are a career learning advisor. Be concise and practical."
+        prompt = (
+            f"You are helping someone learn {role_name}. "
+            f"Based on the URL and platform name below, write exactly 3 sentences explaining: "
+            f"(1) what type of resource this likely is, "
+            f"(2) what topic or skill it probably covers, "
+            f"(3) why it is useful for someone learning {role_name}. "
+            f"Do NOT invent specific course names or instructors. "
+            f"URL: {url} | Platform: {platform} | Title hint: {title}"
+        )
+        summary = _call_groq_direct(
+            [{"role": "user", "content": prompt}],
+            system,
+            max_tokens=180,
+            temperature=0.3,
+            feature_tag="url_summarizer",
+        )
+    except Exception as exc:
+        summary = f"This {platform} resource covers topics relevant to {role_name}. Visit the link to explore the content."
+
+    # Groq might return an error string — keep it but ensure summary is non-empty
+    if not summary or summary.startswith("⚠️"):
+        summary = f"A {platform} resource that likely covers key concepts for {role_name}. Click the link to learn more."
+
+    return {
+        "url":           url,
+        "label":         label,
+        "platform":      platform,
+        "resource_type": resource_type,
+        "title":         title,
+        "summary":       summary,
+    }
+
+
+def _process_url_batch(role_name: str, batch: list) -> list:
+    """Process a batch of URL dicts, catching per-item errors."""
     cards = []
     for item in batch:
-        url, label = (item.get("url",""), item.get("label","")) if isinstance(item,dict) else (item,"")
-        try: card = _process_single_url(role_name, url, label=label)
+        if isinstance(item, dict):
+            url   = item.get("url", "")
+            label = item.get("label", "")
+        else:
+            url, label = item, ""
+
+        if not url:
+            continue
+        try:
+            card = _process_single_url(role_name, url, label=label)
         except Exception as exc:
-            card = {"url": url, "label": label, "platform": "Unknown", "resource_type": "page",
-                    "title": label or _title_from_url(url), "summary": f"Could not summarise. ({type(exc).__name__})"}
+            card = {
+                "url":           url,
+                "label":         label,
+                "platform":      "Generic",
+                "resource_type": "page",
+                "title":         label or _title_from_url(url),
+                "summary":       f"Could not generate summary for this resource. Visit the link directly.",
+            }
         cards.append(card)
     return cards
 
@@ -2256,6 +2099,19 @@ def render_home():
 
 
 # =========================================================
+# NAVIGATION
+# =========================================================
+def go_home(): st.session_state.current_screen = "home"
+def go_to(screen): st.session_state.current_screen = screen
+
+def back_button():
+    col_b, col_rest = st.columns([0.22, 0.78])
+    with col_b:
+        st.button("Home", on_click=go_home, key=f"back_{st.session_state.current_screen}", use_container_width=True)
+    st.divider()
+
+
+# =========================================================
 # SCREEN: RESUME ANALYZER
 # =========================================================
 def render_resume_app():
@@ -2326,7 +2182,7 @@ def render_resume_app():
 
 
 # =========================================================
-# SCREEN: ROLES EXPLORER
+# SCREEN: ROLES EXPLORER  ← FIXED render_roles_app
 # =========================================================
 def render_roles_app():
     back_button()
@@ -2338,15 +2194,18 @@ def render_roles_app():
     def _render_role_detail(role_name, rdata):
         quality = compute_section2_scores(role_name, rdata, embeddings)
         tab_ov, tab_sk, tab_rm, tab_ce = st.tabs(["Overview", "Skills", "Roadmap", "Certifications"])
+
         with tab_ov:
             _badge("Data Quality", quality, 80, 50, fmt="{}%")
+
         with tab_sk:
             st.text(rdata["skills"])
+
         with tab_rm:
-            st.markdown("#### Raw Roadmap")
+            st.markdown("#### 📋 Raw Roadmap")
             st.text(rdata["learning_roadmap"])
             st.divider()
-            st.markdown("#### Resource Summaries")
+
             roadmap_text = rdata.get("learning_roadmap", "")
             if not roadmap_text or roadmap_text == "Not listed":
                 st.info("No roadmap data available for this role.")
@@ -2355,22 +2214,46 @@ def render_roles_app():
                 if not urls_found:
                     st.info("No resource links found in this roadmap.")
                 else:
-                    total_urls = len(urls_found)
-                    cache_key  = f"roadmap_cards__{role_name}"
-                    if cache_key in st.session_state:
+                    st.markdown("#### 🔗 Resource Summaries")
+                    cache_key = f"roadmap_cards__{role_name}"
+
+                    # ── Render from cache if available ────────────────
+                    if cache_key in st.session_state and st.session_state[cache_key]:
                         for card in st.session_state[cache_key]:
-                            emoji = _PLATFORM_EMOJI.get(card["platform"], "🔗")
-                            with st.expander(f"{emoji} {card.get('title','Resource')}", expanded=True):
-                                st.markdown(f"**[{card.get('title','Open')}]({card['url']})**")
-                                st.write(card["summary"])
+                            _render_resource_card(card)
+
                     else:
+                        # ── Generate + render without rerun ──────────
+                        total_urls = len(urls_found)
+                        st.caption(f"Generating summaries for {total_urls} resource(s)…")
+                        progress_bar = st.progress(0)
                         all_cards = []
-                        for batch_start in range(0, total_urls, 3):
-                            batch = urls_found[batch_start:batch_start+3]
+
+                        for batch_idx, batch_start in enumerate(range(0, total_urls, 3)):
+                            batch = urls_found[batch_start:batch_start + 3]
                             new_cards = _process_url_batch(role_name, batch)
                             all_cards.extend(new_cards)
+                            progress = min((batch_start + 3) / total_urls, 1.0)
+                            progress_bar.progress(
+                                progress,
+                                text=f"Processing {min(batch_start + 3, total_urls)}/{total_urls} resources…"
+                            )
+
+                        progress_bar.empty()
+                        # Cache for next visit to this tab
                         st.session_state[cache_key] = all_cards
+
+                        # Render immediately — no rerun needed
+                        for card in all_cards:
+                            _render_resource_card(card)
+
+                    # ── Refresh button ────────────────────────────────
+                    if st.button("🔄 Refresh Resource Summaries", key=f"refresh_res_{role_name}"):
+                        cache_key_to_clear = f"roadmap_cards__{role_name}"
+                        if cache_key_to_clear in st.session_state:
+                            del st.session_state[cache_key_to_clear]
                         st.rerun()
+
         with tab_ce:
             st.text(rdata["certifications"])
 
@@ -2378,7 +2261,8 @@ def render_roles_app():
         selected_role = st.selectbox("Pick a role", sorted(role_names))
         if st.button("Show Details", type="primary"):
             rdata = get_role_data(selected_role)
-            if rdata: _render_role_detail(selected_role, rdata)
+            if rdata:
+                _render_role_detail(selected_role, rdata)
     else:
         user_query = st.text_input("Enter a role name or keyword")
         if st.button("Search", type="primary"):
@@ -2388,7 +2272,31 @@ def render_roles_app():
                 if meta_role:
                     st.info(f"Best match: **{meta_role}**")
                     rdata = get_role_data(meta_role)
-                    if rdata: _render_role_detail(meta_role, rdata)
+                    if rdata:
+                        _render_role_detail(meta_role, rdata)
+
+
+def _render_resource_card(card: dict) -> None:
+    """Render a single resource summary card with styled HTML."""
+    emoji     = _PLATFORM_EMOJI.get(card.get("platform", "Generic"), "🔗")
+    title     = card.get("title") or card.get("label") or "Resource"
+    url       = card.get("url", "#")
+    platform  = card.get("platform", "Generic")
+    summary   = card.get("summary", "Visit the link to explore this resource.")
+
+    st.markdown(f"""
+    <div class="resource-card">
+        <div class="resource-title">{emoji} {title}</div>
+        <span class="resource-platform">{platform}</span>
+        <div class="resource-summary">{summary}</div>
+        <div style="margin-top:10px;">
+            <a href="{url}" target="_blank"
+               style="font-size:0.75rem; color:#22D3EE; font-weight:600;">
+               🔗 Open Resource →
+            </a>
+        </div>
+    </div>
+    """, unsafe_allow_html=True)
 
 
 # =========================================================
@@ -2992,7 +2900,7 @@ def render_linkedin_app():
                 st.session_state.linkedin_bio = ""
                 st.rerun()
 
-        st.caption("💡 Tips: Copy this into your LinkedIn profile → Edit → About section. Customise the tone to match your personality.")
+        st.caption("💡 Tips: Copy this into your LinkedIn profile → Edit → About section.")
 
         with st.expander("📋 How to use on LinkedIn"):
             st.markdown("""
@@ -3360,6 +3268,200 @@ def render_jobs_app():
 
 
 # =========================================================
+# SCREEN: FEEDBACK & COMMUNITY
+# =========================================================
+def render_feedback_app():
+    back_button()
+    st.markdown('<div class="screen-header">⭐ Feedback & Community</div>', unsafe_allow_html=True)
+    st.markdown('<div class="screen-subheader">Share your experience · Rate features · Read what others say</div>', unsafe_allow_html=True)
+
+    stats = fb_get_stats()
+
+    st.markdown("<br>", unsafe_allow_html=True)
+    h1, h2, h3, h4 = st.columns(4)
+    with h1:
+        st.markdown(f"""<div class="hero-stat">
+            <div class="hero-stat-num">{stats["total"]}</div>
+            <div class="hero-stat-lbl">Total Reviews</div></div>""", unsafe_allow_html=True)
+    with h2:
+        st.markdown(f"""<div class="hero-stat">
+            <div class="hero-stat-num">{stats["avg"] or "—"}</div>
+            <div class="hero-stat-lbl">Avg Rating / 5</div></div>""", unsafe_allow_html=True)
+    with h3:
+        dist = stats["dist"]
+        five_pct = int(dist.get(5, 0) / max(stats["total"], 1) * 100)
+        st.markdown(f"""<div class="hero-stat">
+            <div class="hero-stat-num">{five_pct}%</div>
+            <div class="hero-stat-lbl">5-Star Reviews</div></div>""", unsafe_allow_html=True)
+    with h4:
+        top_f = stats["top_features"][0]["feature"].split()[0] if stats["top_features"] else "—"
+        st.markdown(f"""<div class="hero-stat">
+            <div class="hero-stat-num" style="font-size:1.1rem;">{top_f}</div>
+            <div class="hero-stat-lbl">Most Reviewed</div></div>""", unsafe_allow_html=True)
+
+    st.markdown("<br>", unsafe_allow_html=True)
+
+    left_col, right_col = st.columns([1.1, 1.9], gap="large")
+
+    with left_col:
+        st.markdown("#### 📊 Rating Summary")
+        if stats["total"] > 0:
+            st.markdown(f"""
+            <div style="text-align:center; padding:16px 0;">
+                <div class="avg-score">{stats["avg"]}</div>
+                <div style="font-size:1.6rem; margin:4px 0;">{"⭐" * round(stats["avg"])}</div>
+                <div class="avg-label">Based on {stats["total"]} review{"s" if stats["total"] != 1 else ""}</div>
+            </div>""", unsafe_allow_html=True)
+
+            for star in range(5, 0, -1):
+                count = stats["dist"].get(star, 0)
+                pct   = int(count / max(stats["total"], 1) * 100)
+                st.markdown(f"""
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:5px;">
+                    <span style="font-size:0.75rem; color:#9CA3AF; width:28px; text-align:right;">{star}★</span>
+                    <div class="rating-bar-wrap" style="flex:1;">
+                        <div class="rating-bar-fill" style="width:{pct}%;"></div>
+                    </div>
+                    <span style="font-size:0.72rem; color:#4B5563; width:28px;">{count}</span>
+                </div>""", unsafe_allow_html=True)
+        else:
+            st.info("No ratings yet. Be the first!")
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        if stats["top_features"]:
+            st.markdown("#### 🏆 Top Reviewed Features")
+            for f in stats["top_features"]:
+                stars_mini = "⭐" * round(f["avg"])
+                st.markdown(f"""
+                <div style="display:flex; justify-content:space-between; align-items:center;
+                            padding:6px 0; border-bottom:1px solid #1a1a1a;">
+                    <span style="font-size:0.78rem; color:#CBD5E1;">{f["feature"]}</span>
+                    <span style="font-size:0.72rem; color:#22D3EE;">{stars_mini} {f["avg"]}</span>
+                </div>""", unsafe_allow_html=True)
+
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        st.markdown("#### ✍️ Leave a Review")
+        with st.form("feedback_form", clear_on_submit=True):
+            fb_name    = st.text_input("Your Name", placeholder="e.g. Priya S. (or leave blank for Anonymous)")
+            fb_feature = st.selectbox("Which feature are you rating?", FEEDBACK_FEATURES)
+            fb_rating  = st.select_slider(
+                "Your Rating ⭐",
+                options=[1, 2, 3, 4, 5],
+                value=5,
+                format_func=lambda x: {1:"1 ★ Poor", 2:"2 ★★ Fair", 3:"3 ★★★ Good",
+                                        4:"4 ★★★★ Great", 5:"5 ★★★★★ Excellent"}[x]
+            )
+            fb_comment = st.text_area(
+                "Your Comment",
+                placeholder="Tell us what worked well, what could be better, or how it helped you…",
+                height=100
+            )
+            fb_tags_chosen = st.multiselect(
+                "Quick Tags (optional)",
+                FEEDBACK_TAGS,
+                max_selections=3,
+                help="Pick up to 3 tags that describe your experience"
+            )
+            submitted = st.form_submit_button("Submit Review ✓", type="primary", use_container_width=True)
+
+        if submitted:
+            if not fb_comment.strip():
+                st.warning("Please write a comment before submitting.")
+            else:
+                ok = fb_submit(fb_name, fb_feature, fb_rating, fb_comment, fb_tags_chosen)
+                if ok:
+                    st.success("🎉 Thank you! Your review has been posted.")
+                    st.session_state.feedback_submitted = True
+                    st.balloons()
+                    st.rerun()
+                else:
+                    st.error("Could not save review. Please try again.")
+
+    with right_col:
+        st.markdown("#### 💬 Community Reviews")
+
+        fc1, fc2 = st.columns([1.4, 1])
+        with fc1:
+            filter_feature = st.selectbox(
+                "Filter by feature", ["All"] + FEEDBACK_FEATURES,
+                key="fb_filter", label_visibility="collapsed"
+            )
+        with fc2:
+            sort_by = st.selectbox(
+                "Sort", ["newest", "oldest", "highest", "lowest", "most liked"],
+                key="fb_sort", label_visibility="collapsed"
+            )
+
+        reviews = fb_get_all(filter_feature, sort_by)
+        session_id = _session_id()
+        liked_ids  = _liked_set()
+
+        if not reviews:
+            st.markdown("""
+            <div style="text-align:center; padding:60px 20px; color:#4B5563;">
+                <div style="font-size:2.5rem; margin-bottom:12px;">💬</div>
+                <div style="font-size:0.9rem; color:#6B7280;">No reviews yet for this filter.<br>Be the first to share your experience!</div>
+            </div>""", unsafe_allow_html=True)
+        else:
+            st.caption(f"{len(reviews)} review{'s' if len(reviews) != 1 else ''} found")
+            for rev in reviews:
+                tags_html = ""
+                if rev["tags"]:
+                    for tag in rev["tags"].split(","):
+                        if tag.strip():
+                            tags_html += f'<span class="tag-pill">{tag.strip()}</span>'
+
+                star_filled = "⭐" * rev["rating"]
+                star_empty  = "☆" * (5 - rev["rating"])
+                is_liked    = rev["id"] in liked_ids
+
+                st.markdown(f"""
+                <div class="fb-card">
+                    <div style="display:flex; justify-content:space-between; align-items:flex-start;">
+                        <div>
+                            <span class="fb-author">{rev["name"]}</span>
+                            <span class="fb-feature">{rev["feature"]}</span>
+                        </div>
+                        <span class="fb-date">{rev["created"][:16]}</span>
+                    </div>
+                    <div class="fb-stars">{star_filled}{star_empty}</div>
+                    <div class="fb-comment">{rev["comment"]}</div>
+                    {f'<div style="margin-top:8px;">{tags_html}</div>' if tags_html else ''}
+                    <div style="margin-top:10px; display:flex; align-items:center; gap:10px;">
+                        <span class="like-badge">{"❤️" if is_liked else "🤍"} {rev["likes"]} helpful</span>
+                    </div>
+                </div>""", unsafe_allow_html=True)
+
+                btn_label = f"{'❤️ Liked' if is_liked else '🤍 Helpful'} (#{rev['id']})"
+                if st.button(btn_label, key=f"like_{rev['id']}", use_container_width=False):
+                    new_count = fb_toggle_like(rev["id"], session_id)
+                    if is_liked:
+                        liked_ids.discard(rev["id"])
+                    else:
+                        liked_ids.add(rev["id"])
+                    st.session_state._liked_ids = liked_ids
+                    st.rerun()
+
+        highlights = stats["highlights"]
+        if highlights and filter_feature == "All":
+            st.markdown("---")
+            st.markdown("#### 🌟 Top Reviews")
+            for h in highlights:
+                star_h = "⭐" * h["rating"]
+                st.markdown(f"""
+                <div class="fb-card" style="border-left:3px solid #22D3EE;">
+                    <div style="display:flex; justify-content:space-between;">
+                        <span class="fb-author">{h["name"]}</span>
+                        <span class="fb-date">{h["created"][:10]}</span>
+                    </div>
+                    <div class="fb-stars">{star_h}</div>
+                    <div class="fb-comment">"{h["comment"]}"</div>
+                </div>""", unsafe_allow_html=True)
+
+
+# =========================================================
 # SCREEN: ABOUT
 # =========================================================
 def render_about_app():
@@ -3387,23 +3489,21 @@ def render_about_app():
 15. **Feedback & Community** — Star ratings, comments, tag-based reviews, like system & community wall
 
 **Models & APIs**
-- Career Assistant + Cover Letter + Salary + LinkedIn: Groq Llama-3.3-70B (free tier)
+- Career Assistant + Cover Letter + Salary + LinkedIn + Resource Summaries: Groq Llama-3.3-70B
 - Job Listings + Market Insights: Adzuna Jobs API (free tier, 100 calls/day)
 - Skill matching: sentence-transformers/all-MiniLM-L6-v2 + ChromaDB
-- LLM (roadmap/ATS/transitions/summaries): Groq Llama-3.3-70B (fast, no timeouts)
 
 **Skill Dictionaries** — Built dynamically from Career_Path.pdf at startup.
 Currently **{len(STRONG_TECH_KEYWORDS)}** unique skills indexed across **{len(role_names)}** roles.
 
 **Environment Variables needed in .env:**
 - `GROQ_API_KEY` — Groq API key for Llama-3.3-70B (used for ALL LLM calls)
-- `ADZUNA_APP_ID` — Adzuna application ID for job listings
-- `ADZUNA_APP_KEY` — Adzuna application key for job listings
-- `HUGGINGFACEHUB_API_TOKEN` — Still needed for HuggingFace Embeddings (sentence-transformers)
+- `ADZUNA_APP_ID` + `ADZUNA_APP_KEY` — Adzuna Jobs API credentials
+- `HUGGINGFACEHUB_API_TOKEN` — HuggingFace Embeddings (sentence-transformers)
 - `LANGCHAIN_API_KEY` (optional) — LangSmith tracing
-- `LANGCHAIN_TRACING_V2` (optional) — Set to 'true' to enable tracing
+- `LANGCHAIN_TRACING_V2` (optional) — Set to 'true' to enable
 - `LANGCHAIN_PROJECT` (optional) — LangSmith project name
-- `NTFY_TOPIC` (optional) — Push alert notifications
+- `NTFY_TOPIC` (optional) — Push alert notifications via ntfy.sh
 """)
 
 
